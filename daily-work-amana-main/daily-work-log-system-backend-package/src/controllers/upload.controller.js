@@ -31,19 +31,13 @@ const uploadToGCS = (file, folder) => {
 
     stream.on('error', (err) => reject(err));
 
-    stream.on('finish', async () => {
-      try {
-        // 🔹 הופך את האובייקט ל-public (אם ה-Bucket לא מוגדר public by default)
-        await blob.makePublic();
+    stream.on('finish', () => {
+      // ❌ אין makePublic – זה נופל עם UBLA
+      // ✅ מייצרים URL ישיר לאובייקט. אם ה-bucket מוגדר כ-public דרך IAM זה יעבוד.
+      const publicUrl =
+        `https://storage.googleapis.com/${bucketName}/${encodeURIComponent(gcsPath)}`;
 
-        const publicUrl =
-          `https://storage.googleapis.com/${bucketName}/${encodeURIComponent(gcsPath)}`;
-
-        resolve({ publicUrl, storagePath: gcsPath });
-      } catch (err) {
-        console.error('Error making file public:', err);
-        reject(err);
-      }
+      resolve({ publicUrl, storagePath: gcsPath });
     });
 
     stream.end(file.buffer);
