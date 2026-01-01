@@ -83,68 +83,78 @@ const CreateDailyLog = () => {
   };
 
   const handleSubmit = async (values, { setSubmitting }) => {
-    try {
-      setError('');
+  try {
+    setError('');
 
-      const { deliveryCertificate, workPhotos, ...restValues } = values;
+    // נוציא את השדות שקשורים לקבצים + employees בנפרד
+    const { deliveryCertificate, workPhotos, employees, ...restValues } = values;
 
-      // 🔹 שלב 1: יצירת הדוח בלי קבצים (JSON רגיל)
-      const payload = {
-        ...restValues,
-        date: new Date(values.date).toISOString(),
-        startTime: new Date(values.startTime).toISOString(),
-        endTime: new Date(values.endTime).toISOString()
-        // employees כבר מערך רגיל של מחרוזות
-      };
+    // ננקה עובדים ריקים (שדות טקסט ריקים בסוף הרשימה)
+    const cleanedEmployees = (employees || []).filter(
+      (e) => e && e.trim() !== ''
+    );
 
-      const createRes = await logService.createLog(payload);
-      const createdLog = createRes.data;
-      const logId = createdLog._id || createdLog.id;
+    // 🔹 שלב 1: יצירת הדוח בלי קבצים (JSON רגיל)
+    const payload = {
+      ...restValues,
+      // כאן השינוי הכי חשוב: employees כמחרוזת JSON
+      employees: JSON.stringify(cleanedEmployees),
+      date: new Date(values.date).toISOString(),
+      startTime: new Date(values.startTime).toISOString(),
+      endTime: new Date(values.endTime).toISOString()
+    };
 
-      if (!logId) {
-        throw new Error('Log ID is missing in createLog response');
-      }
+    const createRes = await logService.createLog(payload);
+    const createdLog = createRes.data;
+    const logId = createdLog._id || createdLog.id;
 
-      // 🔹 שלב 2: העלאת תמונות (אם יש)
-      if (workPhotos && workPhotos.length > 0) {
-        const photosFormData = new FormData();
-        workPhotos.forEach((photo) => {
-          // שם השדה חייב להיות "photos" לפי upload.routes.js
-          photosFormData.append('photos', photo);
-        });
+    if (!logId) {
+      throw new Error('Log ID is missing in createLog response');
+    }
 
-        await fileService.uploadPhoto(logId, photosFormData);
-      }
+    // 🔹 שלב 2: העלאת תמונות (אם יש)
+    if (workPhotos && workPhotos.length > 0) {
+      const photosFormData = new FormData();
+      workPhotos.forEach((photo) => {
+        // שם השדה חייב להיות "photos" לפי upload.routes.js
+        photosFormData.append('photos', photo);
+      });
 
-      // 🔹 שלב 3: העלאת תעודת משלוח כ-document (אם יש)
-      if (deliveryCertificate) {
-        const docsFormData = new FormData();
-        // שם השדה חייב להיות "documents"
-        docsFormData.append('documents', deliveryCertificate);
-        // אפשר להוסיף טיפוס כדי שיזוהה כ-delivery_note
-        docsFormData.append('type', 'delivery_note');
+      await fileService.uploadPhoto(logId, photosFormData);
+    }
 
-        await fileService.uploadDocument(logId, docsFormData);
-      }
+    // 🔹 שלב 3: העלאת תעודת משלוח כ-document (אם יש)
+    if (deliveryCertificate) {
+      const docsFormData = new FormData();
+      // שם השדה חייב להיות "documents"
+      docsFormData.append('documents', deliveryCertificate);
+      // אפשר להוסיף טיפוס כדי שיזוהה כ-delivery_note
+      docsFormData.append('type', 'delivery_note');
 
-      toast.success('דו"ח עבודה יומי נוצר בהצלחה');
-      navigate('/');
-    } catch (err) {
-  console.error('שגיאה ביצירת דו"ח:', {
-    status: err.response?.status,
-    data: err.response?.data,
-    fullError: err,
-  });
+      await fileService.uploadDocument(logId, docsFormData);
+    }
 
-  const serverMessage = err.response?.data?.message;
+    toast.success('דו"ח עבודה יומי נוצר בהצלחה');
+    navigate('/');
+  } catch (err) {
+    console.error('שגיאה ביצירת דו"ח:', {
+      status: err.response?.status,
+      data: err.response?.data,
+      fullError: err,
+    });
 
-  setError(serverMessage || 'נכשל ביצירת דו"ח. אנא נסה שוב.');
-  toast.error(serverMessage || 'נכשל ביצירת דו"ח');
-} finally {
-  setSubmitting(false);
-}
+    const errors = err.response?.data?.errors;
+    let serverMessage =
+      err.response?.data?.message ||
+      (Array.isArray(errors) && errors.length > 0 ? errors[0]?.msg : null);
 
-  };
+    setError(serverMessage || 'נכשל ביצירת דו"ח. אנא נסה שוב.');
+    toast.error(serverMessage || 'נכשל ביצירת דו"ח');
+  } finally {
+    setSubmitting(false);
+  }
+};
+
 
   return (
     <Container dir="rtl">
