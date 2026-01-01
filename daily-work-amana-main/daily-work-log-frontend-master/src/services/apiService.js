@@ -2,7 +2,7 @@ import axios from 'axios';
 
 // Create axios instance with base URL
 const api = axios.create({
-  baseURL: process.env.REACT_APP_API_URL || 'https://amana-backend-417811099802.me-west1.run.app',
+  baseURL: process.env.REACT_APP_API_URL || 'https://daily-work-amana-main-417811099802.europe-west1.run.app',
 });
 
 // Add request interceptor to include auth token in headers

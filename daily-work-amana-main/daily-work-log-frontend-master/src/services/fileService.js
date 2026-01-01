@@ -42,7 +42,7 @@ export function getFilePreviewUrl(filePath) {
   // אחרת – נבנה URL על בסיס ה-API (backend)
   const baseUrl =
     (process.env.REACT_APP_API_URL ||
-      'https://amana-backend-417811099802.me-west1.run.app').replace(/\/$/, '');
+      'https://daily-work-amana-main-417811099802.europe-west1.run.app').replace(/\/$/, '');
 
   // לוודא שיש / אחד בין הבסיס לנתיב
   const cleanedPath = filePath.startsWith('/') ? filePath : `/${filePath}`;
