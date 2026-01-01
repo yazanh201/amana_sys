@@ -77,6 +77,11 @@ exports.uploadPhotos = async (req, res) => {
       });
     }
 
+    // 🔹 לוודא שמוגדר מערך לפני push (מונע Cannot read properties of undefined (reading 'push'))
+    if (!Array.isArray(log.photos)) {
+      log.photos = [];
+    }
+
     log.photos.push(...uploadedPhotos);
     await log.save();
 
@@ -86,6 +91,7 @@ exports.uploadPhotos = async (req, res) => {
     return res.status(500).json({ message: error.message });
   }
 };
+
 
 /**
  * 📄 Upload Documents
