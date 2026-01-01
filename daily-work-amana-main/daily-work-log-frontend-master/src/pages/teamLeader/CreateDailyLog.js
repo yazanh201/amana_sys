@@ -130,12 +130,20 @@ const CreateDailyLog = () => {
       toast.success('דו"ח עבודה יומי נוצר בהצלחה');
       navigate('/');
     } catch (err) {
-      console.error('שגיאה ביצירת דו"ח:', err);
-      setError('נכשל ביצירת דו"ח. אנא נסה שוב.');
-      toast.error('נכשל ביצירת דו"ח');
-    } finally {
-      setSubmitting(false);
-    }
+  console.error('שגיאה ביצירת דו"ח:', {
+    status: err.response?.status,
+    data: err.response?.data,
+    fullError: err,
+  });
+
+  const serverMessage = err.response?.data?.message;
+
+  setError(serverMessage || 'נכשל ביצירת דו"ח. אנא נסה שוב.');
+  toast.error(serverMessage || 'נכשל ביצירת דו"ח');
+} finally {
+  setSubmitting(false);
+}
+
   };
 
   return (
