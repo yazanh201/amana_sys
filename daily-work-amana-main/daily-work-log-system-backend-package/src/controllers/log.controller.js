@@ -48,7 +48,7 @@ exports.getAllLogs = async (req, res) => {
     const logs = await DailyLog.find(filter)
       .sort({ date: -1 })
       .populate('teamLeader', 'fullName')
-      .populate('project', 'name');
+      
 
     return res.status(200).json(logs);
   } catch (error) {
@@ -184,15 +184,40 @@ exports.updateLog = async (req, res) => {
       return res.status(400).json({ message: 'Cannot update an approved log' });
     }
 
-    const updateData = req.body;
-    // ❌ אסור לעדכן קבצים דרך updateLog
-    delete updateData.documents;
-    delete updateData.photos;
+    // ✅ רק שדות שמותר לעדכן (Whitelist)
+    const allowedFields = [
+      'date',
+      'project',
+      'employees',
+      'startTime',
+      'endTime',
+      'workDescription',
+      'status'
+    ];
 
-    Object.keys(updateData).forEach(key => {
-      if (updateData[key] === undefined) delete updateData[key];
-    });
+    const updateData = {};
+    for (const key of allowedFields) {
+      if (req.body[key] !== undefined) updateData[key] = req.body[key];
+    }
 
+    // ✅ employees יכול להגיע כמחרוזת JSON (כששולחים FormData)
+    if (updateData.employees && typeof updateData.employees === 'string') {
+      try {
+        updateData.employees = JSON.parse(updateData.employees);
+      } catch (e) {
+        // אם זה כבר "a,b,c" או משהו לא JSON
+        // אפשר להשאיר כמו שהוא או להפוך למערך לפי פסיקים
+        // פה נשאיר שגיאה כדי שלא יישמר משהו לא תקין:
+        return res.status(400).json({ message: 'employees must be a valid JSON array' });
+      }
+    }
+
+    // ✅ תאריכים
+    if (updateData.date) updateData.date = new Date(updateData.date);
+    if (updateData.startTime) updateData.startTime = new Date(updateData.startTime);
+    if (updateData.endTime) updateData.endTime = new Date(updateData.endTime);
+
+    // ✅ קבצים ישנים (local uploads) — רק אם אתה עדיין משתמש בזה במסך עדכון
     if (req.files?.deliveryCertificate?.[0]) {
       updateData.deliveryCertificate =
         'uploads/' +
@@ -210,12 +235,14 @@ exports.updateLog = async (req, res) => {
       new: true,
       runValidators: true
     });
+
     return res.status(200).json(updatedLog);
   } catch (error) {
     console.error('❌ Error while updating log:', error);
     return res.status(500).json({ message: error.message || 'Error updating the log' });
   }
 };
+
 
 // Submit a log
 exports.submitLog = async (req, res) => {

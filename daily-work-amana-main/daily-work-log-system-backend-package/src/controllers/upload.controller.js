@@ -34,8 +34,8 @@ const uploadToGCS = (file, folder) => {
     stream.on('finish', () => {
       // ❌ אין makePublic – זה נופל עם UBLA
       // ✅ מייצרים URL ישיר לאובייקט. אם ה-bucket מוגדר כ-public דרך IAM זה יעבוד.
-      const publicUrl =
-        `https://storage.googleapis.com/${bucketName}/${encodeURIComponent(gcsPath)}`;
+      const publicUrl = `https://storage.googleapis.com/${bucketName}/${gcsPath}`;
+
 
       resolve({ publicUrl, storagePath: gcsPath });
     });
@@ -140,12 +140,12 @@ exports.uploadDocuments = async (req, res) => {
       });
     }
 
-    if (!Array.isArray(log.documents)) {
-      log.documents = [];
-    }
+    await DailyLog.findByIdAndUpdate(
+  req.params.logId,
+  { $push: { documents: { $each: uploadedDocuments } } },
+  { new: true, runValidators: true }
+);
 
-    log.documents.push(...uploadedDocuments);
-    await log.save();
 
     return res.status(200).json({
       message: 'Documents uploaded',
