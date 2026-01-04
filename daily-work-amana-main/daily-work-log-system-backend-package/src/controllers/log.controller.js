@@ -111,7 +111,6 @@ exports.getLogById = async (req, res) => {
   }
 };
 
-// Create a new log
 exports.createLog = async (req, res) => {
   try {
     const errors = validationResult(req);
@@ -119,42 +118,64 @@ exports.createLog = async (req, res) => {
       return res.status(400).json({ errors: errors.array() });
     }
 
-    const { date, project, employees, startTime, endTime, workDescription, status } = req.body;
+    let { date, project, employees, startTime, endTime, workDescription, status } = req.body;
+
+    if (!project) {
+      return res.status(400).json({ message: 'Project is required' });
+    }
+
+    // ✅ employees יכול להגיע כמחרוזת JSON (FormData) או כמערך (JSON)
+    if (typeof employees === 'string') {
+      try {
+        employees = JSON.parse(employees);
+      } catch (e) {
+        return res.status(400).json({ message: 'employees must be a valid JSON array' });
+      }
+    }
+
+    if (!Array.isArray(employees)) {
+      return res.status(400).json({ message: 'employees must be an array' });
+    }
 
     const existingLog = await DailyLog.findOne({
       date: new Date(date),
       teamLeader: req.userId,
-      project: project.trim()
+      project: project.trim(),
     });
 
     if (existingLog) {
       await notificationController.createDuplicateWarningNotification(req.userId, date, project);
       return res.status(400).json({
         message: 'A log already exists for this date and project',
-        existingLogId: existingLog._id
+        existingLogId: existingLog._id,
       });
     }
 
+    // legacy local uploads (אם עדיין אתה משתמש בזה)
     const deliveryCertificate = req.files?.deliveryCertificate?.[0]
       ? 'uploads/' + req.files.deliveryCertificate[0].path.replace(/\\/g, '/').split('uploads/')[1]
       : null;
 
-    const workPhotos = req.files?.workPhotos?.map(file => {
-      const relative = file.path.replace(/\\/g, '/').split('uploads/')[1];
-      return `uploads/${relative}`;
-    }) || [];
+    const workPhotos =
+      req.files?.workPhotos?.map((file) => {
+        const relative = file.path.replace(/\\/g, '/').split('uploads/')[1];
+        return `uploads/${relative}`;
+      }) || [];
 
     const newLog = new DailyLog({
       date: new Date(date),
       project: project.trim(),
-      employees: JSON.parse(employees),
+      employees,
       startTime: new Date(startTime),
       endTime: new Date(endTime),
-      workDescription: workDescription.trim(),
+      workDescription: (workDescription || '').trim(),
       deliveryCertificate,
       workPhotos,
       teamLeader: req.userId,
-      status: status || 'draft'
+      status: status || 'draft',
+      // ✅ חשוב: להשאיר ברירת מחדל נקייה
+      documents: [],
+      photos: [],
     });
 
     const savedLog = await newLog.save();
@@ -164,6 +185,7 @@ exports.createLog = async (req, res) => {
     return res.status(500).json({ message: error.message || 'Error creating the log' });
   }
 };
+
 
 // Update a log
 exports.updateLog = async (req, res) => {
@@ -244,7 +266,7 @@ exports.updateLog = async (req, res) => {
 };
 
 
-// Submit a log
+// Submit a log (SAFE VERSION)
 exports.submitLog = async (req, res) => {
   try {
     const log = await DailyLog.findById(req.params.id);
@@ -258,38 +280,64 @@ exports.submitLog = async (req, res) => {
       return res.status(400).json({ message: `Log is already ${log.status}` });
     }
 
-    log.status = 'submitted';
-    await log.save();
+    const updatedLog = await DailyLog.findByIdAndUpdate(
+      req.params.id,
+      { $set: { status: 'submitted' } },
+      { new: true, runValidators: true }
+    );
 
-    return res.status(200).json({ message: 'Log submitted successfully', id: log._id, status: log.status });
+    return res.status(200).json({
+      message: 'Log submitted successfully',
+      id: updatedLog._id,
+      status: updatedLog.status,
+    });
   } catch (error) {
     console.error('❌ Error while submitting log:', error);
     return res.status(500).json({ message: error.message || 'Error submitting the log' });
   }
 };
 
-// Approve a log
+
+// Approve a log (SAFE VERSION)
 exports.approveLog = async (req, res) => {
   try {
     const log = await DailyLog.findById(req.params.id);
-    if (!log) return res.status(404).json({ message: 'Log not found' });
+    if (!log) {
+      return res.status(404).json({ message: 'Log not found' });
+    }
 
     if (log.status !== 'submitted') {
       return res.status(400).json({ message: 'Only submitted logs can be approved' });
     }
 
-    log.status = 'approved';
-    log.approvedBy = req.userId;
-    log.approvedAt = new Date();
-    await log.save();
+    const updatedLog = await DailyLog.findByIdAndUpdate(
+      req.params.id,
+      {
+        $set: {
+          status: 'approved',
+          approvedBy: req.userId,
+          approvedAt: new Date(),
+        },
+      },
+      {
+        new: true,
+        runValidators: true,
+      }
+    );
 
-    await notificationController.createLogApprovedNotification(log._id);
-    return res.status(200).json({ message: 'Log approved successfully', id: log._id, status: log.status });
+    await notificationController.createLogApprovedNotification(updatedLog._id);
+
+    return res.status(200).json({
+      message: 'Log approved successfully',
+      id: updatedLog._id,
+      status: updatedLog.status,
+    });
   } catch (error) {
     console.error('❌ Error while approving log:', error);
     return res.status(500).json({ message: error.message || 'Error approving the log' });
   }
 };
+
 
 // Delete a log
 exports.deleteLog = async (req, res) => {
