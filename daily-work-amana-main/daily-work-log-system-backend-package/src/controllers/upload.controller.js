@@ -94,7 +94,7 @@ exports.uploadPhotos = async (req, res) => {
 
 
 /**
- * 📄 Upload Documents
+ * 📄 Upload Documents (SAFE + ATOMIC)
  */
 exports.uploadDocuments = async (req, res) => {
   try {
@@ -102,18 +102,22 @@ exports.uploadDocuments = async (req, res) => {
       return res.status(400).json({ message: 'No documents uploaded' });
     }
 
-    const log = await DailyLog.findById(req.params.logId);
+    // ✅ Debug schema (כדי לוודא שהמודל בענן הוא החדש)
+    const documentsPath = DailyLog.schema.path('documents');
+    console.log('documents schema instance:', documentsPath?.instance);
+    console.log('documents schema caster:', documentsPath?.caster?.instance); // אם זה "String" -> מודל ישן
+    console.log('documents schema isArray:', documentsPath?.$isMongooseArray);
+
+    // ✅ תביא רק שדות שצריך (לא למשוך documents/photos בכלל)
+    const log = await DailyLog.findById(req.params.logId).select('teamLeader status');
     if (!log) return res.status(404).json({ message: 'Log not found' });
 
-    // ✅ DEBUG (ממש פה)
-    console.log('documents schema instance:', DailyLog.schema.path('documents')?.instance);
-    console.log('documents schema isArray:', DailyLog.schema.path('documents')?.$isMongooseArray);
-    console.log('current log.documents type:', typeof log.documents, 'isArray:', Array.isArray(log.documents));
-
+    // ✅ הרשאות
     if (req.userRole !== 'Manager' && log.teamLeader.toString() !== req.userId) {
       return res.status(403).json({ message: 'Not authorized to upload documents' });
     }
 
+    // ✅ אי אפשר להעלות למסמך מאושר
     if (log.status === 'approved') {
       return res.status(400).json({ message: 'Log already approved' });
     }
@@ -132,30 +136,32 @@ exports.uploadDocuments = async (req, res) => {
       const { publicUrl, storagePath } = await uploadToGCS(file, 'documents');
 
       uploadedDocuments.push({
-        path: publicUrl,
-        storagePath,
-        type: req.body.type || getDocumentType(file.originalname),
+        path: publicUrl,              // URL ל-React
+        storagePath,                  // למחיקה מה-Bucket
+        type: req.body?.type || getDocumentType(file.originalname),
         originalName: file.originalname,
         uploadedAt: new Date(),
       });
     }
 
-    await DailyLog.findByIdAndUpdate(
-  req.params.logId,
-  { $push: { documents: { $each: uploadedDocuments } } },
-  { new: true, runValidators: true }
-);
-
+    // ✅ עדכון אטומי - בלי log.save()
+    const updatedLog = await DailyLog.findByIdAndUpdate(
+      req.params.logId,
+      { $push: { documents: { $each: uploadedDocuments } } },
+      { new: true, runValidators: true }
+    ).select('_id documents'); // אפשר להחזיר רק מה שצריך
 
     return res.status(200).json({
       message: 'Documents uploaded',
       documents: uploadedDocuments,
+      totalDocuments: updatedLog?.documents?.length ?? undefined,
     });
   } catch (error) {
     console.error('Upload Documents Error:', error);
     return res.status(500).json({ message: error.message });
   }
 };
+
 
 /**
  * 🗑 Delete File
