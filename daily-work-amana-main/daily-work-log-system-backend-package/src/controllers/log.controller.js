@@ -162,6 +162,10 @@ exports.createLog = async (req, res) => {
         return `uploads/${relative}`;
       }) || [];
 
+      console.log('MODEL CHECK documents instance:', DailyLog.schema.path('documents')?.instance);
+      console.log('MODEL CHECK documents caster:', DailyLog.schema.path('documents')?.caster?.instance);
+
+
     const newLog = new DailyLog({
       date: new Date(date),
       project: project.trim(),

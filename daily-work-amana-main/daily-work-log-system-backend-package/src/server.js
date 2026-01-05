@@ -117,6 +117,9 @@ mongoose
   })
   .then(() => {
     console.log('✅ Connected to MongoDB');
+    console.log('✅ MONGO CONNECTED TO DB:', mongoose.connection.name);
+    console.log('✅ MONGO HOST:', mongoose.connection.host);
+
 
     app.listen(PORT, '0.0.0.0', () => {
       console.log(`🚀 Server is running on port ${PORT}`);
