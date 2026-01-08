@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Container, Row, Col, Card, Button, Badge, Alert } from 'react-bootstrap';
 import { useParams, useNavigate } from 'react-router-dom';
-import { FaArrowLeft, FaDownload, FaCheck, FaFileDownload } from 'react-icons/fa';
+import { FaArrowLeft, FaCheck, FaFileDownload } from 'react-icons/fa';
 import { logService } from '../../services/apiService';
 import { toast } from 'react-toastify';
 import moment from 'moment';
@@ -76,14 +76,20 @@ const LogDetails = () => {
   };
 
   if (loading) {
-    return <Container><p className="text-center">טוען פרטי דוח...</p></Container>;
+    return (
+      <Container>
+        <p className="text-center">טוען פרטי דוח...</p>
+      </Container>
+    );
   }
 
   if (error) {
     return (
       <Container>
         <Alert variant="danger">{error}</Alert>
-        <Button variant="primary" onClick={() => navigate('/all-logs')}>חזור לכל הדוחות</Button>
+        <Button variant="primary" onClick={() => navigate('/all-logs')}>
+          חזור לכל הדוחות
+        </Button>
       </Container>
     );
   }
@@ -92,7 +98,9 @@ const LogDetails = () => {
     return (
       <Container>
         <Alert variant="warning">הדוח לא נמצא</Alert>
-        <Button variant="primary" onClick={() => navigate('/all-logs')}>חזור לכל הדוחות</Button>
+        <Button variant="primary" onClick={() => navigate('/all-logs')}>
+          חזור לכל הדוחות
+        </Button>
       </Container>
     );
   }
@@ -125,23 +133,36 @@ const LogDetails = () => {
       </Row>
 
       <Card className="mb-4">
-        <Card.Header><h5 className="mb-0">מידע כללי</h5></Card.Header>
+        <Card.Header>
+          <h5 className="mb-0">מידע כללי</h5>
+        </Card.Header>
         <Card.Body>
           <Row>
             <Col md={6}>
-              <p><strong>תאריך:</strong> {moment(log.date).format('DD/MM/YYYY')}</p>
-              <p><strong>פרויקט:</strong> {log.project}</p>
+              <p>
+                <strong>תאריך:</strong> {moment(log.date).format('DD/MM/YYYY')}
+              </p>
+              <p>
+                <strong>פרויקט:</strong> {log.project}
+              </p>
             </Col>
             <Col md={6}>
-              <p><strong>ראש צוות:</strong> {log.teamLeader?.fullName}</p>
-              <p><strong>שעות עבודה:</strong> {moment(log.startTime).format('HH:mm')} - {moment(log.endTime).format('HH:mm')}</p>
+              <p>
+                <strong>ראש צוות:</strong> {log.teamLeader?.fullName}
+              </p>
+              <p>
+                <strong>שעות עבודה:</strong> {moment(log.startTime).format('HH:mm')} -{' '}
+                {moment(log.endTime).format('HH:mm')}
+              </p>
             </Col>
           </Row>
         </Card.Body>
       </Card>
 
       <Card className="mb-4">
-        <Card.Header><h5 className="mb-0">עובדים נוכחים</h5></Card.Header>
+        <Card.Header>
+          <h5 className="mb-0">עובדים נוכחים</h5>
+        </Card.Header>
         <Card.Body>
           {log.employees.length === 0 ? (
             <p className="text-muted">לא נרשמו עובדים בדוח זה</p>
@@ -156,100 +177,66 @@ const LogDetails = () => {
       </Card>
 
       <Card className="mb-4">
-        <Card.Header><h5 className="mb-0">תיאור עבודה</h5></Card.Header>
+        <Card.Header>
+          <h5 className="mb-0">תיאור עבודה</h5>
+        </Card.Header>
         <Card.Body>
           <p>{log.workDescription}</p>
         </Card.Body>
       </Card>
 
-     <Card className="mb-4">
-  <Card.Header><h5 className="mb-0">תמונות מהשטח</h5></Card.Header>
-  <Card.Body>
-    <Row>
-      {log.workPhotos.map((photoPath, index) => {
-        const fullUrl = `https://daily-work-amana-main-backend-417811099802.europe-west1.run.app/${photoPath}`;
-        return (
-          <Col md={3} key={index} className="mb-3"> {/* 🔹 אפשר גם md=3 כדי להקטין */}
-            <div
-              style={{
-                backgroundColor: '#fff',
-                padding: '8px',
-                borderRadius: '12px',
-                border: '1px solid #ddd',
-                textAlign: 'center'
-              }}
-            >
-              <a href={fullUrl} target="_blank" rel="noopener noreferrer">
-                <img
-                  src={fullUrl}
-                  alt={`תמונה ${index + 1}`}
-                  className="img-thumbnail"
-                  style={{
-                    maxWidth: '150px', // 🔹 תמונה קטנה
-                    maxHeight: '150px',
-                    objectFit: 'cover'
-                  }}
-                />
-              </a>
-            </div>
-          </Col>
-        );
-      })}
-    </Row>
-  </Card.Body>
-</Card>
+      <Card className="mb-4">
+        <Card.Header>
+          <h5 className="mb-0">תמונות מהשטח</h5>
+        </Card.Header>
+        <Card.Body>
+          <Row>
+            {log.workPhotos.map((photoPath, index) => {
+              const fullUrl = `https://daily-work-amana-main-backend-417811099802.europe-west1.run.app/${photoPath}`;
+              return (
+                <Col md={3} key={index} className="mb-3">
+                  <div
+                    style={{
+                      backgroundColor: '#fff',
+                      padding: '8px',
+                      borderRadius: '12px',
+                      border: '1px solid #ddd',
+                      textAlign: 'center',
+                    }}
+                  >
+                    <a href={fullUrl} target="_blank" rel="noopener noreferrer">
+                      <img
+                        src={fullUrl}
+                        alt={`תמונה ${index + 1}`}
+                        className="img-thumbnail"
+                        style={{
+                          maxWidth: '150px',
+                          maxHeight: '150px',
+                          objectFit: 'cover',
+                        }}
+                      />
+                    </a>
+                  </div>
+                </Col>
+              );
+            })}
+          </Row>
+        </Card.Body>
+      </Card>
 
-<Card className="mb-4">
-  <Card.Header><h5 className="mb-0">תעודת משלוח</h5></Card.Header>
-  <Card.Body>
-    {log.deliveryCertificate ? (
-      <div>
-        {/* אם זה PDF או מסמך */}
-        {log.deliveryCertificate.endsWith('.pdf') ? (
-          <a
-            href={`https://daily-work-amana-main-backend-417811099802.europe-west1.run.app/${log.deliveryCertificate}`}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="btn btn-outline-primary"
-          >
-            <FaFileDownload className="me-1" /> הורד תעודת משלוח
-          </a>
-        ) : (
-          // אם זה תמונה → מוצגת קטנה (thumbnail)
-          <a
-            href={`https://daily-work-amana-main-backend-417811099802.europe-west1.run.app/${log.deliveryCertificate}`}
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <img
-              src={`https://daily-work-amana-main-backend-417811099802.europe-west1.run.app/${log.deliveryCertificate}`}
-              alt="תעודת משלוח"
-              className="img-thumbnail"
-              style={{
-                maxWidth: '150px',   // 🔹 גודל קטן יותר
-                maxHeight: '150px',
-                objectFit: 'cover',
-                border: '1px solid #ddd',
-                borderRadius: '8px',
-                cursor: 'pointer'
-              }}
-            />
-          </a>
-        )}
-      </div>
-    ) : (
-      <p className="text-muted">לא צורפה תעודת משלוח לדוח זה</p>
-    )}
-  </Card.Body>
-</Card>
-
-
+      {/* ✅ נמחק כרטיס "תעודת משלוח" לחלוטין */}
 
       <Card className="mb-4">
-        <Card.Header><h5 className="mb-0">היסטוריית הדוח</h5></Card.Header>
+        <Card.Header>
+          <h5 className="mb-0">היסטוריית הדוח</h5>
+        </Card.Header>
         <Card.Body>
-          <p><strong>נוצר:</strong> {moment(log.createdAt).format('DD/MM/YYYY HH:mm')}</p>
-          <p><strong>עודכן לאחרונה:</strong> {moment(log.updatedAt).format('DD/MM/YYYY HH:mm')}</p>
+          <p>
+            <strong>נוצר:</strong> {moment(log.createdAt).format('DD/MM/YYYY HH:mm')}
+          </p>
+          <p>
+            <strong>עודכן לאחרונה:</strong> {moment(log.updatedAt).format('DD/MM/YYYY HH:mm')}
+          </p>
         </Card.Body>
       </Card>
     </Container>

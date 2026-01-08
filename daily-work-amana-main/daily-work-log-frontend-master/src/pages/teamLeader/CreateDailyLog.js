@@ -4,7 +4,7 @@ import { useNavigate } from 'react-router-dom';
 import { Formik } from 'formik';
 import * as Yup from 'yup';
 import { logService } from '../../services/apiService';
-import { fileService } from '../../services/apiService'; // ⬅️ חדש
+import { fileService } from '../../services/apiService';
 import { toast } from 'react-toastify';
 import DatePicker from 'react-datepicker';
 import 'react-datepicker/dist/react-datepicker.css';
@@ -51,6 +51,24 @@ const QuarterHourSelectTimePicker = ({ label, value, onChange }) => {
   );
 };
 
+/** ✅ אוטומציה: אם שעת סיום <= שעת התחלה => endNextDay=true, אחרת false */
+const AutoNextDayWatcher = ({ startTime, endTime, endNextDay, setFieldValue }) => {
+  React.useEffect(() => {
+    if (!startTime || !endTime) return;
+
+    const s = new Date(startTime);
+    const e = new Date(endTime);
+
+    const shouldBeNextDay = e <= s;
+
+    if (endNextDay !== shouldBeNextDay) {
+      setFieldValue('endNextDay', shouldBeNextDay);
+    }
+  }, [startTime, endTime, endNextDay, setFieldValue]);
+
+  return null;
+};
+
 const CreateDailyLog = () => {
   const navigate = useNavigate();
   const [error, setError] = useState('');
@@ -60,16 +78,25 @@ const CreateDailyLog = () => {
     project: Yup.string().required('יש להזין שם פרויקט'),
     employees: Yup.array().min(1, 'יש להזין לפחות עובד אחד'),
     startTime: Yup.date().required('יש להזין שעת התחלה'),
-    endTime: Yup.date()
-      .required('יש להזין שעת סיום')
-      .test('is-after-start', 'שעת הסיום חייבת להיות לאחר שעת ההתחלה', function (value) {
-        const { startTime } = this.parent;
-        return !startTime || !value || value > startTime;
-      }),
+    endTime: Yup.date().required('יש להזין שעת סיום'),
+    endNextDay: Yup.boolean(),
     workDescription: Yup.string().required('יש להזין תיאור עבודה'),
-    deliveryCertificate: Yup.mixed().nullable(),
-    workPhotos: Yup.mixed().nullable()
-  });
+    workPhotos: Yup.mixed().nullable(),
+  }).test(
+    'end-after-start-with-nextday',
+    'שעת הסיום חייבת להיות אחרי שעת ההתחלה (אם זה ביום למחרת – זה יסתדר אוטומטית)',
+    function (values) {
+      const { startTime, endTime, endNextDay } = values || {};
+      if (!startTime || !endTime) return true;
+
+      const start = new Date(startTime);
+      const end = new Date(endTime);
+
+      if (endNextDay) end.setDate(end.getDate() + 1);
+
+      return end > start;
+    }
+  );
 
   const initialValues = {
     date: new Date(),
@@ -77,84 +104,77 @@ const CreateDailyLog = () => {
     employees: [''],
     startTime: new Date(new Date().setHours(8, 0, 0, 0)),
     endTime: new Date(new Date().setHours(17, 0, 0, 0)),
+    endNextDay: false,
     workDescription: '',
-    deliveryCertificate: null,
-    workPhotos: []
+    workPhotos: [],
   };
 
   const handleSubmit = async (values, { setSubmitting }) => {
-  try {
-    setError('');
+    try {
+      setError('');
 
-    // נוציא את השדות שקשורים לקבצים + employees בנפרד
-    const { deliveryCertificate, workPhotos, employees, ...restValues } = values;
+      const { workPhotos, employees, endNextDay, ...restValues } = values;
 
-    // ננקה עובדים ריקים (שדות טקסט ריקים בסוף הרשימה)
-    const cleanedEmployees = (employees || []).filter(
-      (e) => e && e.trim() !== ''
-    );
+      const cleanedEmployees = (employees || []).filter((e) => e && e.trim() !== '');
 
-    // 🔹 שלב 1: יצירת הדוח בלי קבצים (JSON רגיל)
-    const payload = {
-      ...restValues,
-      // כאן השינוי הכי חשוב: employees כמחרוזת JSON
-      employees: JSON.stringify(cleanedEmployees),
-      date: new Date(values.date).toISOString(),
-      startTime: new Date(values.startTime).toISOString(),
-      endTime: new Date(values.endTime).toISOString()
-    };
+      // ✅ בונים start/end אמיתיים על בסיס התאריך של הדוח
+      const baseDate = new Date(values.date);
 
-    const createRes = await logService.createLog(payload);
-    const createdLog = createRes.data;
-    const logId = createdLog._id || createdLog.id;
+      const start = new Date(baseDate);
+      start.setHours(values.startTime.getHours(), values.startTime.getMinutes(), 0, 0);
 
-    if (!logId) {
-      throw new Error('Log ID is missing in createLog response');
-    }
+      const end = new Date(baseDate);
+      end.setHours(values.endTime.getHours(), values.endTime.getMinutes(), 0, 0);
 
-    // 🔹 שלב 2: העלאת תמונות (אם יש)
-    if (workPhotos && workPhotos.length > 0) {
-      const photosFormData = new FormData();
-      workPhotos.forEach((photo) => {
-        // שם השדה חייב להיות "photos" לפי upload.routes.js
-        photosFormData.append('photos', photo);
+      // ✅ אם אוטומטית זה למחרת (או המשתמש שינה), נוסיף יום
+      if (endNextDay) end.setDate(end.getDate() + 1);
+
+      const payload = {
+        ...restValues,
+        employees: JSON.stringify(cleanedEmployees),
+        date: new Date(values.date).toISOString(),
+        startTime: start.toISOString(),
+        endTime: end.toISOString(),
+      };
+
+      const createRes = await logService.createLog(payload);
+      const createdLog = createRes.data;
+      const logId = createdLog._id || createdLog.id;
+
+      if (!logId) {
+        throw new Error('Log ID is missing in createLog response');
+      }
+
+      // 🔹 העלאת תמונות (אם יש)
+      if (workPhotos && workPhotos.length > 0) {
+        const photosFormData = new FormData();
+        workPhotos.forEach((photo) => {
+          photosFormData.append('photos', photo);
+        });
+
+        await fileService.uploadPhoto(logId, photosFormData);
+      }
+
+      toast.success('דו"ח עבודה יומי נוצר בהצלחה');
+      navigate('/');
+    } catch (err) {
+      console.error('שגיאה ביצירת דו"ח:', {
+        status: err.response?.status,
+        data: err.response?.data,
+        fullError: err,
       });
 
-      await fileService.uploadPhoto(logId, photosFormData);
+      const errors = err.response?.data?.errors;
+      let serverMessage =
+        err.response?.data?.message ||
+        (Array.isArray(errors) && errors.length > 0 ? errors[0]?.msg : null);
+
+      setError(serverMessage || 'נכשל ביצירת דו"ח. אנא נסה שוב.');
+      toast.error(serverMessage || 'נכשל ביצירת דו"ח');
+    } finally {
+      setSubmitting(false);
     }
-
-    // 🔹 שלב 3: העלאת תעודת משלוח כ-document (אם יש)
-    if (deliveryCertificate) {
-      const docsFormData = new FormData();
-      // שם השדה חייב להיות "documents"
-      docsFormData.append('documents', deliveryCertificate);
-      // אפשר להוסיף טיפוס כדי שיזוהה כ-delivery_note
-      docsFormData.append('type', 'delivery_note');
-
-      await fileService.uploadDocument(logId, docsFormData);
-    }
-
-    toast.success('דו"ח עבודה יומי נוצר בהצלחה');
-    navigate('/');
-  } catch (err) {
-    console.error('שגיאה ביצירת דו"ח:', {
-      status: err.response?.status,
-      data: err.response?.data,
-      fullError: err,
-    });
-
-    const errors = err.response?.data?.errors;
-    let serverMessage =
-      err.response?.data?.message ||
-      (Array.isArray(errors) && errors.length > 0 ? errors[0]?.msg : null);
-
-    setError(serverMessage || 'נכשל ביצירת דו"ח. אנא נסה שוב.');
-    toast.error(serverMessage || 'נכשל ביצירת דו"ח');
-  } finally {
-    setSubmitting(false);
-  }
-};
-
+  };
 
   return (
     <Container dir="rtl">
@@ -169,22 +189,17 @@ const CreateDailyLog = () => {
 
       <Card>
         <Card.Body>
-          <Formik
-            initialValues={initialValues}
-            validationSchema={validationSchema}
-            onSubmit={handleSubmit}
-          >
-            {({
-              values,
-              errors,
-              touched,
-              handleChange,
-              handleBlur,
-              handleSubmit,
-              setFieldValue,
-              isSubmitting
-            }) => (
+          <Formik initialValues={initialValues} validationSchema={validationSchema} onSubmit={handleSubmit}>
+            {({ values, errors, touched, handleChange, handleBlur, handleSubmit, setFieldValue, isSubmitting }) => (
               <Form onSubmit={handleSubmit}>
+                {/* ✅ אוטומציה לסיום ביום למחרת */}
+                <AutoNextDayWatcher
+                  startTime={values.startTime}
+                  endTime={values.endTime}
+                  endNextDay={values.endNextDay}
+                  setFieldValue={setFieldValue}
+                />
+
                 <Row>
                   <Col md={6}>
                     <Form.Group className="mb-3">
@@ -233,16 +248,14 @@ const CreateDailyLog = () => {
                             updated.splice(index, 1);
                             setFieldValue('employees', updated);
                           }}
+                          disabled={values.employees.length === 1}
                         >
                           ✕
                         </Button>
                       </Col>
                     </Row>
                   ))}
-                  <Button
-                    variant="outline-primary"
-                    onClick={() => setFieldValue('employees', [...values.employees, ''])}
-                  >
+                  <Button variant="outline-primary" onClick={() => setFieldValue('employees', [...values.employees, ''])}>
                     הוסף עובד
                   </Button>
                 </Form.Group>
@@ -258,6 +271,7 @@ const CreateDailyLog = () => {
                       <div className="invalid-feedback d-block">{errors.startTime}</div>
                     )}
                   </Col>
+
                   <Col md={6}>
                     <QuarterHourSelectTimePicker
                       label="שעת סיום"
@@ -267,8 +281,22 @@ const CreateDailyLog = () => {
                     {touched.endTime && errors.endTime && (
                       <div className="invalid-feedback d-block">{errors.endTime}</div>
                     )}
+
+                    {/* ✅ אינדיקציה בלבד (לא כפתור) */}
+                    {values.endNextDay && (
+                      <div className="text-muted mt-2" style={{ fontSize: '0.9rem' }}>
+                        שים לב: שעת הסיום יוצאת ביום למחרת
+                      </div>
+                    )}
                   </Col>
                 </Row>
+
+                {/* שגיאת ולידציה כללית מה-test */}
+                {typeof errors === 'string' && (
+                  <Alert variant="danger" className="mt-2">
+                    {errors}
+                  </Alert>
+                )}
 
                 <Form.Group className="mb-3">
                   <Form.Label>תיאור העבודה</Form.Label>
@@ -280,15 +308,6 @@ const CreateDailyLog = () => {
                     onChange={handleChange}
                     onBlur={handleBlur}
                     isInvalid={touched.workDescription && !!errors.workDescription}
-                  />
-                </Form.Group>
-
-                <Form.Group className="mb-4">
-                  <Form.Label>תעודת משלוח</Form.Label>
-                  <Form.Control
-                    type="file"
-                    accept="image/*,.pdf"
-                    onChange={(e) => setFieldValue('deliveryCertificate', e.currentTarget.files[0])}
                   />
                 </Form.Group>
 
@@ -314,12 +333,12 @@ const CreateDailyLog = () => {
                 </Form.Group>
 
                 <div className="d-flex justify-content-between">
-                  <Button variant="secondary" onClick={() => navigate('/')}>ביטול</Button>
-                  <div>
-                    <Button variant="success" type="submit" disabled={isSubmitting}>
-                      {isSubmitting ? 'שולח...' : 'שמור ושלח'}
-                    </Button>
-                  </div>
+                  <Button variant="secondary" onClick={() => navigate('/')}>
+                    ביטול
+                  </Button>
+                  <Button variant="success" type="submit" disabled={isSubmitting}>
+                    {isSubmitting ? 'שולח...' : 'שמור ושלח'}
+                  </Button>
                 </div>
               </Form>
             )}
