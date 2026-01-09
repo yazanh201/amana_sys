@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Container, Row, Col, Card, Button, Badge, Alert } from 'react-bootstrap';
 import { useParams, useNavigate } from 'react-router-dom';
 import { FaArrowLeft, FaCheck, FaFileDownload } from 'react-icons/fa';
@@ -50,13 +50,16 @@ const LogDetails = () => {
       const response = await logService.exportLogToPdf(id);
       const blob = new Blob([response.data], { type: 'application/pdf' });
       const url = window.URL.createObjectURL(blob);
+
       const link = document.createElement('a');
       link.href = url;
       link.setAttribute('download', `daily-log-${id}.pdf`);
       document.body.appendChild(link);
       link.click();
+
       window.URL.revokeObjectURL(url);
       document.body.removeChild(link);
+
       toast.success('הייצוא ל־PDF הצליח');
     } catch (err) {
       console.error('שגיאה ביצוא PDF:', err);
@@ -76,6 +79,37 @@ const LogDetails = () => {
         return <Badge bg="secondary">לא ידוע</Badge>;
     }
   };
+
+  // ✅ בניית URL בטוחה לתמונה
+  const resolveFileUrl = (filePath) => {
+    if (!filePath) return '';
+    if (filePath.startsWith('http')) return filePath;
+
+    const baseUrl = (process.env.REACT_APP_API_URL || '').replace(/\/$/, '');
+    const cleanedPath = String(filePath).replace(/^\/+/, '');
+    return baseUrl ? `${baseUrl}/${cleanedPath}` : `/${cleanedPath}`;
+  };
+
+  // ✅ חישוב סכום שעות עבודה (אם אין workHours)
+  const calcWorkHours = () => {
+    if (log?.workHours !== undefined && log?.workHours !== null && log?.workHours !== '') {
+      return Number(log.workHours);
+    }
+
+    if (!log?.startTime || !log?.endTime) return null;
+
+    const start = moment(log.startTime);
+    const end = moment(log.endTime);
+
+    if (end.isBefore(start)) {
+      end.add(1, 'day');
+    }
+
+    const hours = moment.duration(end.diff(start)).asHours();
+    return Math.round(hours * 10) / 10; // ספרה אחת אחרי הנקודה
+  };
+
+  const employees = Array.isArray(log?.employees) ? log.employees : [];
 
   if (loading) {
     return (
@@ -117,9 +151,9 @@ const LogDetails = () => {
           </Button>
         </Col>
         <Col xs="auto">
-          {/* <Button variant="outline-secondary" className="me-2" onClick={handleExportToPdf}>
+          <Button variant="outline-secondary" className="me-2" onClick={handleExportToPdf}>
             <FaFileDownload className="me-1" /> ייצוא ל־PDF
-          </Button> */}
+          </Button>
 
           {log.status === 'submitted' && (
             <Button variant="success" onClick={handleApproveLog}>
@@ -146,87 +180,107 @@ const LogDetails = () => {
           <Row>
             <Col md={6}>
               <p>
-                <strong>תאריך:</strong> {moment(log.date).format('DD/MM/YYYY')}
+                <strong>תאריך:</strong>{' '}
+                {log.date ? moment(log.date).format('DD/MM/YYYY') : '—'}
               </p>
               <p>
-                <strong>פרויקט:</strong> {log.project}
+                <strong>פרויקט:</strong> {log.project || '—'}
               </p>
             </Col>
 
             <Col md={6}>
               <p>
-                <strong>ראש צוות:</strong> {log.teamLeader?.fullName}
+                <strong>ראש צוות:</strong> {log.teamLeader?.fullName || '—'}
               </p>
               <p>
-                <strong>שעות עבודה:</strong> {moment(log.startTime).format('HH:mm')} -{' '}
-                {moment(log.endTime).format('HH:mm')}
+                <strong>שעות עבודה:</strong>{' '}
+                {log.startTime ? moment(log.startTime).format('HH:mm') : '—'} –{' '}
+                {log.endTime ? moment(log.endTime).format('HH:mm') : '—'}
+                {calcWorkHours() !== null && (
+                  <strong> ({calcWorkHours()} שעות)</strong>
+                )}
               </p>
             </Col>
           </Row>
         </Card.Body>
       </Card>
 
+      {/* עובדים נוכחים */}
       <Card className="mb-4">
         <Card.Header>
           <h5 className="mb-0">עובדים נוכחים</h5>
         </Card.Header>
         <Card.Body>
-          {log.employees.length === 0 ? (
-            <p className="text-muted">לא נרשמו עובדים בדוח זה</p>
-          ) : (
-            <ul className="list-unstyled">
-              {log.employees.map((employee, index) => (
+          {employees.length > 0 ? (
+            <ul className="list-unstyled mb-0">
+              {employees.map((employee, index) => (
                 <li key={index}>{employee}</li>
               ))}
             </ul>
+          ) : (
+            <p className="text-muted mb-0">לא נרשמו עובדים בדוח זה</p>
           )}
         </Card.Body>
       </Card>
 
+      {/* תיאור עבודה */}
       <Card className="mb-4">
         <Card.Header>
           <h5 className="mb-0">תיאור עבודה</h5>
         </Card.Header>
         <Card.Body>
-          <p>{log.workDescription}</p>
+          <p className="mb-0">{log.workDescription || '—'}</p>
         </Card.Body>
       </Card>
 
+      {/* תמונות */}
       <Card className="mb-4">
         <Card.Header>
           <h5 className="mb-0">תמונות מהשטח</h5>
         </Card.Header>
         <Card.Body>
           <Row>
-            {log.workPhotos.map((photoPath, index) => {
-              const fullUrl = `https://daily-work-amana-main-backend-417811099802.europe-west1.run.app/${photoPath}`;
-              return (
-                <Col md={3} key={index} className="mb-3">
-                  <div
-                    style={{
-                      backgroundColor: '#fff',
-                      padding: '8px',
-                      borderRadius: '12px',
-                      border: '1px solid #ddd',
-                      textAlign: 'center',
-                    }}
-                  >
-                    <a href={fullUrl} target="_blank" rel="noopener noreferrer">
+            {Array.isArray(log.photos) && log.photos.length > 0 ? (
+              log.photos.map((photo, i) => {
+                const url = resolveFileUrl(photo?.path);
+                if (!url) return null;
+
+                return (
+                  <Col md={3} key={photo?._id || i} className="mb-3">
+                    <a href={url} target="_blank" rel="noopener noreferrer">
                       <img
-                        src={fullUrl}
-                        alt={`תמונה ${index + 1}`}
+                        src={url}
+                        alt={photo?.originalName || `תמונה ${i + 1}`}
                         className="img-thumbnail"
-                        style={{
-                          maxWidth: '150px',
-                          maxHeight: '150px',
-                          objectFit: 'cover',
-                        }}
+                        style={{ maxWidth: '150px', maxHeight: '150px', objectFit: 'cover' }}
                       />
                     </a>
-                  </div>
-                </Col>
-              );
-            })}
+                  </Col>
+                );
+              })
+            ) : Array.isArray(log.workPhotos) && log.workPhotos.length > 0 ? (
+              log.workPhotos.map((photoPath, i) => {
+                const url = resolveFileUrl(photoPath);
+                if (!url) return null;
+
+                return (
+                  <Col md={3} key={i} className="mb-3">
+                    <a href={url} target="_blank" rel="noopener noreferrer">
+                      <img
+                        src={url}
+                        alt={`תמונה ${i + 1}`}
+                        className="img-thumbnail"
+                        style={{ maxWidth: '150px', maxHeight: '150px', objectFit: 'cover' }}
+                      />
+                    </a>
+                  </Col>
+                );
+              })
+            ) : (
+              <Col>
+                <p className="text-muted mb-0">לא הועלו תמונות</p>
+              </Col>
+            )}
           </Row>
         </Card.Body>
       </Card>
@@ -238,10 +292,12 @@ const LogDetails = () => {
         </Card.Header>
         <Card.Body>
           <p>
-            <strong>נוצר:</strong> {moment(log.createdAt).format('DD/MM/YYYY HH:mm')}
+            <strong>נוצר:</strong>{' '}
+            {log.createdAt ? moment(log.createdAt).format('DD/MM/YYYY HH:mm') : '—'}
           </p>
-          <p>
-            <strong>עודכן לאחרונה:</strong> {moment(log.updatedAt).format('DD/MM/YYYY HH:mm')}
+          <p className="mb-0">
+            <strong>עודכן לאחרונה:</strong>{' '}
+            {log.updatedAt ? moment(log.updatedAt).format('DD/MM/YYYY HH:mm') : '—'}
           </p>
         </Card.Body>
       </Card>
