@@ -26,6 +26,11 @@ const DailyLogSchema = new mongoose.Schema(
       type: Date,
       required: [true, 'End time is required'],
     },
+
+    workHours: {
+      type: Number,
+      required: true,
+    },
     workDescription: {
       type: String,
       required: [true, 'Work description is required'],
