@@ -151,9 +151,9 @@ const LogDetails = () => {
           </Button>
         </Col>
         <Col xs="auto">
-          <Button variant="outline-secondary" className="me-2" onClick={handleExportToPdf}>
+          {/* <Button variant="outline-secondary" className="me-2" onClick={handleExportToPdf}>
             <FaFileDownload className="me-1" /> ייצוא ל־PDF
-          </Button>
+          </Button> */}
 
           {log.status === 'submitted' && (
             <Button variant="success" onClick={handleApproveLog}>
