@@ -75,6 +75,16 @@ const LogDetails = () => {
     }
   };
 
+  // 🔗 בניית URL בטוחה לתמונה
+  const resolveFileUrl = (filePath) => {
+    if (!filePath) return '';
+    if (filePath.startsWith('http')) return filePath;
+
+    const baseUrl = (process.env.REACT_APP_API_URL || '').replace(/\/$/, '');
+    const cleanedPath = filePath.replace(/^\/+/, '');
+    return `${baseUrl}/${cleanedPath}`;
+  };
+
   if (loading) {
     return (
       <Container>
@@ -107,6 +117,7 @@ const LogDetails = () => {
 
   return (
     <Container dir="rtl">
+      {/* ניווט */}
       <Row className="mb-4">
         <Col>
           <Button variant="outline-secondary" onClick={() => navigate('/all-logs')}>
@@ -125,6 +136,7 @@ const LogDetails = () => {
         </Col>
       </Row>
 
+      {/* כותרת */}
       <Row className="mb-4">
         <Col>
           <h2>פרטי דוח עבודה יומי</h2>
@@ -132,6 +144,7 @@ const LogDetails = () => {
         </Col>
       </Row>
 
+      {/* מידע כללי */}
       <Card className="mb-4">
         <Card.Header>
           <h5 className="mb-0">מידע כללי</h5>
@@ -139,104 +152,75 @@ const LogDetails = () => {
         <Card.Body>
           <Row>
             <Col md={6}>
-              <p>
-                <strong>תאריך:</strong> {moment(log.date).format('DD/MM/YYYY')}
-              </p>
-              <p>
-                <strong>פרויקט:</strong> {log.project}
-              </p>
+              <p><strong>תאריך:</strong> {moment(log.date).format('DD/MM/YYYY')}</p>
+              <p><strong>פרויקט:</strong> {log.project}</p>
             </Col>
             <Col md={6}>
+              <p><strong>ראש צוות:</strong> {log.teamLeader?.fullName}</p>
               <p>
-                <strong>ראש צוות:</strong> {log.teamLeader?.fullName}
-              </p>
-              <p>
-                <strong>שעות עבודה:</strong> {moment(log.startTime).format('HH:mm')} -{' '}
-                {moment(log.endTime).format('HH:mm')}
+                <strong>שעות עבודה:</strong>{' '}
+                {moment(log.startTime).format('HH:mm')} – {moment(log.endTime).format('HH:mm')}
+                <strong> ({log.workHours} שעות)</strong>
               </p>
             </Col>
           </Row>
         </Card.Body>
       </Card>
 
-      <Card className="mb-4">
-        <Card.Header>
-          <h5 className="mb-0">עובדים נוכחים</h5>
-        </Card.Header>
-        <Card.Body>
-          {log.employees.length === 0 ? (
-            <p className="text-muted">לא נרשמו עובדים בדוח זה</p>
-          ) : (
-            <ul className="list-unstyled">
-              {log.employees.map((employee, index) => (
-                <li key={index}>{employee}</li>
-              ))}
-            </ul>
-          )}
-        </Card.Body>
-      </Card>
-
-      <Card className="mb-4">
-        <Card.Header>
-          <h5 className="mb-0">תיאור עבודה</h5>
-        </Card.Header>
-        <Card.Body>
-          <p>{log.workDescription}</p>
-        </Card.Body>
-      </Card>
-
+      {/* תמונות */}
       <Card className="mb-4">
         <Card.Header>
           <h5 className="mb-0">תמונות מהשטח</h5>
         </Card.Header>
         <Card.Body>
           <Row>
-            {log.workPhotos.map((photoPath, index) => {
-              const fullUrl = `https://daily-work-amana-main-backend-417811099802.europe-west1.run.app/${photoPath}`;
-              return (
-                <Col md={3} key={index} className="mb-3">
-                  <div
-                    style={{
-                      backgroundColor: '#fff',
-                      padding: '8px',
-                      borderRadius: '12px',
-                      border: '1px solid #ddd',
-                      textAlign: 'center',
-                    }}
-                  >
-                    <a href={fullUrl} target="_blank" rel="noopener noreferrer">
+            {log.photos && log.photos.length > 0 ? (
+              log.photos.map((photo, i) => {
+                const url = resolveFileUrl(photo.path);
+                return (
+                  <Col md={3} key={photo._id || i} className="mb-3">
+                    <a href={url} target="_blank" rel="noopener noreferrer">
                       <img
-                        src={fullUrl}
-                        alt={`תמונה ${index + 1}`}
+                        src={url}
+                        alt={photo.originalName || `תמונה ${i + 1}`}
                         className="img-thumbnail"
-                        style={{
-                          maxWidth: '150px',
-                          maxHeight: '150px',
-                          objectFit: 'cover',
-                        }}
+                        style={{ maxWidth: '150px', maxHeight: '150px', objectFit: 'cover' }}
                       />
                     </a>
-                  </div>
-                </Col>
-              );
-            })}
+                  </Col>
+                );
+              })
+            ) : log.workPhotos && log.workPhotos.length > 0 ? (
+              log.workPhotos.map((photoPath, i) => {
+                const url = resolveFileUrl(photoPath);
+                return (
+                  <Col md={3} key={i} className="mb-3">
+                    <a href={url} target="_blank" rel="noopener noreferrer">
+                      <img
+                        src={url}
+                        alt={`תמונה ${i + 1}`}
+                        className="img-thumbnail"
+                        style={{ maxWidth: '150px', maxHeight: '150px', objectFit: 'cover' }}
+                      />
+                    </a>
+                  </Col>
+                );
+              })
+            ) : (
+              <p className="text-muted">לא הועלו תמונות</p>
+            )}
           </Row>
         </Card.Body>
       </Card>
 
-      {/* ✅ נמחק כרטיס "תעודת משלוח" לחלוטין */}
-
+      {/* היסטוריה */}
       <Card className="mb-4">
         <Card.Header>
           <h5 className="mb-0">היסטוריית הדוח</h5>
         </Card.Header>
         <Card.Body>
-          <p>
-            <strong>נוצר:</strong> {moment(log.createdAt).format('DD/MM/YYYY HH:mm')}
-          </p>
-          <p>
-            <strong>עודכן לאחרונה:</strong> {moment(log.updatedAt).format('DD/MM/YYYY HH:mm')}
-          </p>
+          <p><strong>נוצר:</strong> {moment(log.createdAt).format('DD/MM/YYYY HH:mm')}</p>
+          <p><strong>עודכן לאחרונה:</strong> {moment(log.updatedAt).format('DD/MM/YYYY HH:mm')}</p>
         </Card.Body>
       </Card>
     </Container>

@@ -120,6 +120,25 @@ exports.createLog = async (req, res) => {
 
     let { date, project, employees, startTime, endTime, workDescription, status } = req.body;
 
+        // ⏱️ חישוב שעות עבודה
+    const start = new Date(startTime);
+    const end = new Date(endTime);
+
+    if (isNaN(start) || isNaN(end)) {
+      return res.status(400).json({ message: 'Invalid startTime or endTime' });
+    }
+
+    if (end <= start) {
+      return res.status(400).json({
+        message: 'End time must be after start time',
+      });
+    }
+
+    const diffMs = end - start;
+    const workHours = Math.round((diffMs / (1000 * 60 * 60)) * 100) / 100;
+    // לדוגמה: 8.5
+
+
     if (!project) {
       return res.status(400).json({ message: 'Project is required' });
     }
@@ -137,19 +156,6 @@ exports.createLog = async (req, res) => {
       return res.status(400).json({ message: 'employees must be an array' });
     }
 
-    const existingLog = await DailyLog.findOne({
-      date: new Date(date),
-      teamLeader: req.userId,
-      project: project.trim(),
-    });
-
-    if (existingLog) {
-      await notificationController.createDuplicateWarningNotification(req.userId, date, project);
-      return res.status(400).json({
-        message: 'A log already exists for this date and project',
-        existingLogId: existingLog._id,
-      });
-    }
 
     // legacy local uploads (אם עדיין אתה משתמש בזה)
     const deliveryCertificate = req.files?.deliveryCertificate?.[0]
@@ -172,6 +178,7 @@ exports.createLog = async (req, res) => {
       employees,
       startTime: new Date(startTime),
       endTime: new Date(endTime),
+      workHours,
       workDescription: (workDescription || '').trim(),
       deliveryCertificate,
       workPhotos,
@@ -242,6 +249,23 @@ exports.updateLog = async (req, res) => {
     if (updateData.date) updateData.date = new Date(updateData.date);
     if (updateData.startTime) updateData.startTime = new Date(updateData.startTime);
     if (updateData.endTime) updateData.endTime = new Date(updateData.endTime);
+
+        // ⏱️ חישוב מחדש של שעות עבודה אם השתנו הזמנים
+    if (updateData.startTime || updateData.endTime) {
+      const start = updateData.startTime || log.startTime;
+      const end = updateData.endTime || log.endTime;
+
+      if (end <= start) {
+        return res.status(400).json({
+          message: 'End time must be after start time',
+        });
+      }
+
+      const diffMs = end - start;
+      updateData.workHours =
+        Math.round((diffMs / (1000 * 60 * 60)) * 100) / 100;
+    }
+
 
     // ✅ קבצים ישנים (local uploads) — רק אם אתה עדיין משתמש בזה במסך עדכון
     if (req.files?.deliveryCertificate?.[0]) {

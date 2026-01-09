@@ -134,9 +134,11 @@ const ViewDailyLog = () => {
               </p>
               <p>
                 <strong>שעות עבודה:</strong>{' '}
-                {moment(log.startTime).format('HH:mm')} -{' '}
+                {moment(log.startTime).format('HH:mm')} –{' '}
                 {moment(log.endTime).format('HH:mm')}
+                <strong> ({log.workHours} שעות)</strong>
               </p>
+
             </Col>
           </Row>
         </Card.Body>
