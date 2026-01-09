@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { Container, Row, Col, Card, Button, Badge, Alert } from 'react-bootstrap';
 import { useParams, useNavigate } from 'react-router-dom';
 import { FaArrowLeft, FaCheck, FaFileDownload } from 'react-icons/fa';
@@ -9,12 +9,14 @@ import moment from 'moment';
 const LogDetails = () => {
   const { id } = useParams();
   const navigate = useNavigate();
+
   const [log, setLog] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
 
   useEffect(() => {
     fetchLog();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id]);
 
   const fetchLog = async () => {
@@ -75,6 +77,59 @@ const LogDetails = () => {
     }
   };
 
+  // ✅ Base URL נקי מסלאש בסוף
+  const baseUrl = useMemo(() => {
+    const envBase = (process.env.REACT_APP_API_URL || '').trim();
+    return envBase.replace(/\/$/, '');
+  }, []);
+
+  // ✅ בניית URL בטוחה לקבצים/תמונות (תומך גם ב-http מלא)
+  const resolveFileUrl = (filePath) => {
+    if (!filePath) return '';
+
+    // אם זה כבר URL מלא — לא נוגעים
+    if (/^https?:\/\//i.test(filePath)) return filePath;
+
+    // מנקה סלאשים בהתחלה
+    const cleanedPath = String(filePath).replace(/^\/+/, '');
+
+    // אם אין בכלל baseUrl — ננסה לעבוד יחסי (לא אידיאלי אבל עדיף מכלום)
+    if (!baseUrl) return `/${cleanedPath}`;
+
+    return `${baseUrl}/${cleanedPath}`;
+  };
+
+  // ✅ איסוף תמונות מכל מבנה אפשרי למבנה אחיד
+  const normalizedPhotos = useMemo(() => {
+    if (!log) return [];
+
+    // photos: [{path, originalName, _id}]
+    if (Array.isArray(log.photos) && log.photos.length > 0) {
+      return log.photos
+        .filter((p) => p && p.path)
+        .map((p, i) => ({
+          key: p._id || `photo-${i}`,
+          url: resolveFileUrl(p.path),
+          alt: p.originalName || `תמונה ${i + 1}`,
+        }));
+    }
+
+    // workPhotos: ["uploads/...", ...]
+    if (Array.isArray(log.workPhotos) && log.workPhotos.length > 0) {
+      return log.workPhotos
+        .filter(Boolean)
+        .map((path, i) => ({
+          key: `workPhoto-${i}`,
+          url: resolveFileUrl(path),
+          alt: `תמונה ${i + 1}`,
+        }));
+    }
+
+    return [];
+  }, [log, baseUrl]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const employees = Array.isArray(log?.employees) ? log.employees : [];
+
   if (loading) {
     return (
       <Container>
@@ -107,6 +162,7 @@ const LogDetails = () => {
 
   return (
     <Container dir="rtl">
+      {/* ניווט */}
       <Row className="mb-4">
         <Col>
           <Button variant="outline-secondary" onClick={() => navigate('/all-logs')}>
@@ -114,9 +170,10 @@ const LogDetails = () => {
           </Button>
         </Col>
         <Col xs="auto">
-          <Button variant="outline-secondary" className="me-2" onClick={handleExportToPdf}>
+          {/* <Button variant="outline-secondary" className="me-2" onClick={handleExportToPdf}>
             <FaFileDownload className="me-1" /> ייצוא ל־PDF
-          </Button>
+          </Button> */}
+
           {log.status === 'submitted' && (
             <Button variant="success" onClick={handleApproveLog}>
               <FaCheck className="me-1" /> אשר דוח
@@ -125,6 +182,7 @@ const LogDetails = () => {
         </Col>
       </Row>
 
+      {/* כותרת */}
       <Row className="mb-4">
         <Col>
           <h2>פרטי דוח עבודה יומי</h2>
@@ -132,6 +190,7 @@ const LogDetails = () => {
         </Col>
       </Row>
 
+      {/* מידע כללי */}
       <Card className="mb-4">
         <Card.Header>
           <h5 className="mb-0">מידע כללי</h5>
@@ -140,35 +199,39 @@ const LogDetails = () => {
           <Row>
             <Col md={6}>
               <p>
-                <strong>תאריך:</strong> {moment(log.date).format('DD/MM/YYYY')}
+                <strong>תאריך:</strong> {log.date ? moment(log.date).format('DD/MM/YYYY') : '—'}
               </p>
               <p>
-                <strong>פרויקט:</strong> {log.project}
+                <strong>פרויקט:</strong> {log.project || '—'}
               </p>
             </Col>
+
             <Col md={6}>
               <p>
-                <strong>ראש צוות:</strong> {log.teamLeader?.fullName}
+                <strong>ראש צוות:</strong> {log.teamLeader?.fullName || '—'}
               </p>
               <p>
-                <strong>שעות עבודה:</strong> {moment(log.startTime).format('HH:mm')} -{' '}
-                {moment(log.endTime).format('HH:mm')}
+                <strong>שעות עבודה:</strong>{' '}
+                {log.startTime ? moment(log.startTime).format('HH:mm') : '—'} –{' '}
+                {log.endTime ? moment(log.endTime).format('HH:mm') : '—'}
+                {log.workHours ? <strong> ({log.workHours} שעות)</strong> : null}
               </p>
             </Col>
           </Row>
         </Card.Body>
       </Card>
 
+      {/* עובדים נוכחים */}
       <Card className="mb-4">
         <Card.Header>
           <h5 className="mb-0">עובדים נוכחים</h5>
         </Card.Header>
         <Card.Body>
-          {log.employees.length === 0 ? (
+          {employees.length === 0 ? (
             <p className="text-muted">לא נרשמו עובדים בדוח זה</p>
           ) : (
-            <ul className="list-unstyled">
-              {log.employees.map((employee, index) => (
+            <ul className="list-unstyled mb-0">
+              {employees.map((employee, index) => (
                 <li key={index}>{employee}</li>
               ))}
             </ul>
@@ -176,25 +239,28 @@ const LogDetails = () => {
         </Card.Body>
       </Card>
 
+      {/* תיאור עבודה */}
       <Card className="mb-4">
         <Card.Header>
           <h5 className="mb-0">תיאור עבודה</h5>
         </Card.Header>
         <Card.Body>
-          <p>{log.workDescription}</p>
+          <p className="mb-0">{log.workDescription || '—'}</p>
         </Card.Body>
       </Card>
 
+      {/* תמונות */}
       <Card className="mb-4">
         <Card.Header>
           <h5 className="mb-0">תמונות מהשטח</h5>
         </Card.Header>
         <Card.Body>
-          <Row>
-            {log.workPhotos.map((photoPath, index) => {
-              const fullUrl = `https://daily-work-amana-main-backend-417811099802.europe-west1.run.app/${photoPath}`;
-              return (
-                <Col md={3} key={index} className="mb-3">
+          {normalizedPhotos.length === 0 ? (
+            <p className="text-muted mb-0">לא הועלו תמונות</p>
+          ) : (
+            <Row>
+              {normalizedPhotos.map((p, index) => (
+                <Col md={3} key={p.key} className="mb-3">
                   <div
                     style={{
                       backgroundColor: '#fff',
@@ -204,38 +270,53 @@ const LogDetails = () => {
                       textAlign: 'center',
                     }}
                   >
-                    <a href={fullUrl} target="_blank" rel="noopener noreferrer">
+                    <a href={p.url} target="_blank" rel="noopener noreferrer">
                       <img
-                        src={fullUrl}
-                        alt={`תמונה ${index + 1}`}
+                        src={p.url}
+                        alt={p.alt}
                         className="img-thumbnail"
                         style={{
                           maxWidth: '150px',
                           maxHeight: '150px',
                           objectFit: 'cover',
                         }}
+                        onError={(e) => {
+                          // כדי שלא תישאר תמונה שבורה
+                          e.currentTarget.style.display = 'none';
+                          console.warn('Image failed to load:', p.url);
+                        }}
                       />
                     </a>
+                    {/* אופציונלי: כיתוב מתחת לתמונה */}
+                    {/* <div className="mt-1 text-muted" style={{ fontSize: '12px' }}>{p.alt}</div> */}
                   </div>
                 </Col>
-              );
-            })}
-          </Row>
+              ))}
+            </Row>
+          )}
+
+          {/* עוזר לך בדיבאג אם env לא מוגדר */}
+          {!baseUrl && (
+            <Alert variant="warning" className="mt-3 mb-0">
+              שים לב: REACT_APP_API_URL לא מוגדר, התמונות נבנות כנתיב יחסי. מומלץ להגדיר אותו בקובץ .env של ה־Frontend.
+            </Alert>
+          )}
         </Card.Body>
       </Card>
 
-      {/* ✅ נמחק כרטיס "תעודת משלוח" לחלוטין */}
-
+      {/* היסטוריה */}
       <Card className="mb-4">
         <Card.Header>
           <h5 className="mb-0">היסטוריית הדוח</h5>
         </Card.Header>
         <Card.Body>
           <p>
-            <strong>נוצר:</strong> {moment(log.createdAt).format('DD/MM/YYYY HH:mm')}
+            <strong>נוצר:</strong>{' '}
+            {log.createdAt ? moment(log.createdAt).format('DD/MM/YYYY HH:mm') : '—'}
           </p>
-          <p>
-            <strong>עודכן לאחרונה:</strong> {moment(log.updatedAt).format('DD/MM/YYYY HH:mm')}
+          <p className="mb-0">
+            <strong>עודכן לאחרונה:</strong>{' '}
+            {log.updatedAt ? moment(log.updatedAt).format('DD/MM/YYYY HH:mm') : '—'}
           </p>
         </Card.Body>
       </Card>
