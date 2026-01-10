@@ -112,52 +112,48 @@ exports.getLogById = async (req, res) => {
 };
 
 exports.createLog = async (req, res) => {
+  const session = await mongoose.startSession();
+  session.startTransaction();
+
   try {
     const errors = validationResult(req);
     if (!errors.isEmpty()) {
+      await session.abortTransaction();
+      session.endSession();
       return res.status(400).json({ errors: errors.array() });
     }
 
     let { date, project, employees, startTime, endTime, workDescription, status } = req.body;
 
-        // ⏱️ חישוב שעות עבודה
+    // ✅ בדיקות חובה
+    if (!date || !project || !startTime || !endTime) {
+      throw new Error('Missing required fields');
+    }
+
+    // ⏱️ חישוב שעות
     const start = new Date(startTime);
     const end = new Date(endTime);
 
     if (isNaN(start) || isNaN(end)) {
-      return res.status(400).json({ message: 'Invalid startTime or endTime' });
+      throw new Error('Invalid startTime or endTime');
     }
 
     if (end <= start) {
-      return res.status(400).json({
-        message: 'End time must be after start time',
-      });
+      throw new Error('End time must be after start time');
     }
 
     const diffMs = end - start;
     const workHours = Math.round((diffMs / (1000 * 60 * 60)) * 100) / 100;
-    // לדוגמה: 8.5
 
-
-    if (!project) {
-      return res.status(400).json({ message: 'Project is required' });
-    }
-
-    // ✅ employees יכול להגיע כמחרוזת JSON (FormData) או כמערך (JSON)
+    // 👷 עובדים
     if (typeof employees === 'string') {
-      try {
-        employees = JSON.parse(employees);
-      } catch (e) {
-        return res.status(400).json({ message: 'employees must be a valid JSON array' });
-      }
+      employees = JSON.parse(employees);
+    }
+    if (!Array.isArray(employees) || employees.length === 0) {
+      throw new Error('Employees must be a non-empty array');
     }
 
-    if (!Array.isArray(employees)) {
-      return res.status(400).json({ message: 'employees must be an array' });
-    }
-
-
-    // legacy local uploads (אם עדיין אתה משתמש בזה)
+    // 📎 קבצים
     const deliveryCertificate = req.files?.deliveryCertificate?.[0]
       ? 'uploads/' + req.files.deliveryCertificate[0].path.replace(/\\/g, '/').split('uploads/')[1]
       : null;
@@ -168,34 +164,46 @@ exports.createLog = async (req, res) => {
         return `uploads/${relative}`;
       }) || [];
 
-      console.log('MODEL CHECK documents instance:', DailyLog.schema.path('documents')?.instance);
-      console.log('MODEL CHECK documents caster:', DailyLog.schema.path('documents')?.caster?.instance);
-
-
+    // 📝 יצירת הדוח (עדיין לא נשמר בפועל)
     const newLog = new DailyLog({
       date: new Date(date),
       project: project.trim(),
       employees,
-      startTime: new Date(startTime),
-      endTime: new Date(endTime),
+      startTime: start,
+      endTime: end,
       workHours,
       workDescription: (workDescription || '').trim(),
       deliveryCertificate,
       workPhotos,
       teamLeader: req.userId,
       status: status || 'draft',
-      // ✅ חשוב: להשאיר ברירת מחדל נקייה
       documents: [],
       photos: [],
     });
 
-    const savedLog = await newLog.save();
+    // 💾 שמירה עם session
+    const savedLog = await newLog.save({ session });
+
+    // ✅ הכל עבר – מאשרים
+    await session.commitTransaction();
+    session.endSession();
+
     return res.status(201).json(savedLog);
+
   } catch (error) {
-    console.error('❌ Error while creating log:', error);
-    return res.status(500).json({ message: error.message || 'Error creating the log' });
+    // ❌ כל שגיאה → ביטול מוחלט
+    await session.abortTransaction();
+    session.endSession();
+
+    console.error('❌ Log creation failed:', error.message);
+
+    return res.status(400).json({
+      message: 'Log was NOT saved. Fix the error and try again.',
+      error: error.message,
+    });
   }
 };
+
 
 
 // Update a log

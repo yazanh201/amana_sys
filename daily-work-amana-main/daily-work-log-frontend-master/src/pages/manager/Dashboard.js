@@ -212,14 +212,6 @@ const ManagerDashboard = () => {
                       >
                         <FaEye />
                       </Button>
-                      <Button
-                        variant="outline-secondary"
-                        size="sm"
-                        className="me-1"
-                        onClick={() => handleExportToPdf(log._id)}
-                      >
-                        <FaFileDownload />
-                      </Button>
                       {log.status === 'submitted' && (
                         <Button
                           variant="outline-success"
