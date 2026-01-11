@@ -57,7 +57,7 @@
         <Container>
           <Navbar.Brand as={Link} to="/">
             <img
-              src="/amana1.png"
+              src="/amana.png"
               alt="לוגו החברה"
               height="65"
               className="d-inline-block align-top"

@@ -47,7 +47,7 @@ const Login = () => {
             {/* 🔴 לוגו החברה באמצע */}
             <div className="text-center mb-4">
               <img
-                src="/amana1.png"
+                src="/amana.png"
                 alt="Company Logo"
                 style={{
                   width: '150px',
