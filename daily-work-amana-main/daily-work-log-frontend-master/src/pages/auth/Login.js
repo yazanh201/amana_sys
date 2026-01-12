@@ -4,19 +4,21 @@ import { Formik } from 'formik';
 import * as Yup from 'yup';
 import { useAuth } from '../../context/AuthContext';
 import { toast } from 'react-toastify';
+import { useNavigate } from 'react-router-dom';
 
 const Login = () => {
   const { login } = useAuth();
+  const navigate = useNavigate();
   const [error, setError] = useState('');
 
   const validationSchema = Yup.object({
     email: Yup.string().required('שדה חובה'),
-    password: Yup.string().required('שדה חובה')
+    password: Yup.string().required('שדה חובה'),
   });
 
   const initialValues = {
     email: '',
-    password: ''
+    password: '',
   };
 
   const handleSubmit = async (values, { setSubmitting }) => {
@@ -44,7 +46,7 @@ const Login = () => {
         <Col md={5} className="mx-auto">
           <Card className="shadow-sm p-4">
 
-            {/* 🔴 לוגו החברה באמצע */}
+            {/* לוגו */}
             <div className="text-center mb-4">
               <img
                 src="/amana.png"
@@ -52,12 +54,12 @@ const Login = () => {
                 style={{
                   width: '150px',
                   height: '150px',
-                  objectFit: 'contain'
+                  objectFit: 'contain',
                 }}
               />
             </div>
 
-            {/* כותרות */}
+            {/* כותרת */}
             <div className="text-center mb-4">
               <h2 className="fw-bold">מערכת ניהול דוחות יומיים</h2>
               <p className="text-muted">התחבר לחשבון שלך</p>
@@ -65,10 +67,21 @@ const Login = () => {
 
             {error && <Alert variant="danger">{error}</Alert>}
 
-            <Formik initialValues={initialValues} validationSchema={validationSchema} onSubmit={handleSubmit}>
-              {({ values, errors, touched, handleChange, handleBlur, handleSubmit, isSubmitting }) => (
+            <Formik
+              initialValues={initialValues}
+              validationSchema={validationSchema}
+              onSubmit={handleSubmit}
+            >
+              {({
+                values,
+                errors,
+                touched,
+                handleChange,
+                handleBlur,
+                handleSubmit,
+                isSubmitting,
+              }) => (
                 <Form onSubmit={handleSubmit}>
-                  
                   <Form.Group className="mb-3">
                     <Form.Label>אימייל</Form.Label>
                     <Form.Control
@@ -79,7 +92,9 @@ const Login = () => {
                       onBlur={handleBlur}
                       isInvalid={touched.email && errors.email}
                     />
-                    <Form.Control.Feedback type="invalid">{errors.email}</Form.Control.Feedback>
+                    <Form.Control.Feedback type="invalid">
+                      {errors.email}
+                    </Form.Control.Feedback>
                   </Form.Group>
 
                   <Form.Group className="mb-4">
@@ -92,17 +107,33 @@ const Login = () => {
                       onBlur={handleBlur}
                       isInvalid={touched.password && errors.password}
                     />
-                    <Form.Control.Feedback type="invalid">{errors.password}</Form.Control.Feedback>
+                    <Form.Control.Feedback type="invalid">
+                      {errors.password}
+                    </Form.Control.Feedback>
                   </Form.Group>
 
-                  <Button variant="primary" type="submit" disabled={isSubmitting} className="w-100 py-2">
+                  <Button
+                    variant="primary"
+                    type="submit"
+                    disabled={isSubmitting}
+                    className="w-100 py-2"
+                  >
                     {isSubmitting ? 'מתחבר...' : 'התחבר'}
                   </Button>
+
+                  {/* 🔹 כפתור הרשמה */}
+                  <div className="text-center mt-3">
+                    <Button
+                      variant="link"
+                      onClick={() => navigate('/register')}
+                    >
+                      אין לך משתמש? הרשמה
+                    </Button>
+                  </div>
 
                 </Form>
               )}
             </Formik>
-
           </Card>
         </Col>
       </Row>
